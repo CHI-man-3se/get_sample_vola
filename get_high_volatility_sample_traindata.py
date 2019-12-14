@@ -9,6 +9,8 @@ from itertools import chain
 df = pd.read_csv('/Users/apple/python/oanda/input_USDJPY_CSV/USDJPY_10m_after2014.csv')
 df_len = len(df)
 df.head()
+print("break")
+
 
 ##############################################################
 ###            ALLデータかランダムで100サンプル数だけ取得する      ###
@@ -59,50 +61,86 @@ def get_Theshold(sample_set):
     under_Threshold = candle_mean - std_90line
     over_Threshold = candle_mean + std_90line
 
+    return under_Threshold , over_Threshold
+
+
+
+##############################################################
+###           分散が大きいindex番号だけをとってくる              ###
+##############################################################
+
+def get_highVolatility_index(sample_set ,under_Threshold, over_Threshold):
+
+    # high_volaのdataframeをゲット　※ほしいのはindexだけなので、それだけ貰えればいいかも
     high_volatility = sample_set.query('OPEN < @under_Threshold or @over_Threshold < OPEN')
 
-    return under_Threshold , over_Threshold , high_volatility
-
-
-##############################################################
-###          分散が大きいやつのあとに来るcandleの属性を確認       ###
-##############################################################
-
-def get_highVolatility_index(sample_set):
-
-
-    #print(sample_high_volatility)
-    sample_len = len(sample_set)
+    sample_len = len(high_volatility)
     
-    index_num = sample_set.index.values
+    index_num = high_volatility.index.values
 
-    # 分散がでかい、先頭のindexは入れておく
-    #drop_sequence_index = np.array([index_num[0]])
-    drop_sequence_index = [index_num[0]]
-    
+    drop_sequence_index = []
+
     # 分散がでかくなった瞬間を持ってきたいので、連続indexが連続になっているのは省く
-    for i in range(sample_len):
+    # indexが連続しているのをdropさせるloop
 
-        # listがオーバフローしないために
-        if i == sample_len-1:
-            None
-        else :
-            #print("i  " , index_num[i])
-            #print("i+1" , index_num[i+1])
+    # 分散がでかい、先頭のindexは無条件で追加
+    #drop_sequence_index = [index_num[0]]
+    
+    if sample_len == 0 :
+        None
+    else:
+        drop_sequence_index = [index_num[0]]
 
-            is_sequence = index_num[i+1] - index_num[i]
+        for i in range(sample_len):
 
-            # 連続しているindexは省き、分散がでかくなった瞬間のindexを持ってくる
-            if is_sequence == 1:
+            # listがオーバフローしないために
+            if i == sample_len-1:
                 None
-            else:
-                #np.append(drop_sequence_index,index_num[i+1])
-                drop_sequence_index.append(index_num[i+1])
+            else :
+                
+                is_sequence = index_num[i+1] - index_num[i]
+                # 連続しているindexは省き、分散がでかくなった瞬間のindexを持ってくる
+                if is_sequence == 1:
+                    None
+                else:
+                    drop_sequence_index.append(index_num[i+1])
 
     return drop_sequence_index
 
 
 
+##############################################################
+###      分散が大きいindex番号から、around list BLOCK作成       ###
+##############################################################
+
+def get_high_vola_Blocks(df , high_vola_index):
+    
+    df_high_vola_Blocks = []
+
+    for i in high_vola_index:
+        df_high_vola = df.iloc[ i-6:i+6, :]  
+        df_high_vola_Blocks.append(df_high_vola)
+
+    return df_high_vola_Blocks
+
+##############################################################
+###      　　　　　　　　　index と OPENだけにする　　　　       ###
+##############################################################
+
+def drop_other(highVola_Blocks):
+
+    print(highVola_Blocks[0].columns)
+    print("break")
+
+    listof_df_droped = []
+
+    for i in highVola_Blocks:
+        print(i.columns)
+        print(i)
+    
+    #return listof_df_droped
+    
+    
 ##############################################################
 ###           1階差をとり、nparrayに変換する関数                ###
 ##############################################################
@@ -110,7 +148,10 @@ def get_highVolatility_index(sample_set):
 # 引数　pandas
 # 返り値　nparray
 def get_diff_1(sample):
-    open_array = sample['OPEN'].values
+    print(sample)
+    print(type(sample[0]))
+    print("debug")
+    open_array = sample[0].iloc[:,4].values
     diff_1_list = []
     j = 0
     for i in open_array:
@@ -124,6 +165,41 @@ def get_diff_1(sample):
     diff_1_nparray = np.array(diff_1_list)
 
     return diff_1_nparray
+
+
+##############################################################
+###                nparrayの階差関数をつかって                ###
+##############################################################
+
+def get_diff1_from_Blocks(blocks):
+
+    diff_each_blocks = []
+
+    for i in blocks:
+        np_blocks = i.iloc[:,4].values
+        diff_each_blocks.append( np.diff(np_blocks) )
+
+    return diff_each_blocks
+
+
+############################################################
+###          diffを見て、それがintense or 緩やかを確認したい   ###
+###     sample 100ごとの diff　listを作ってそれのstdをとるか   ###
+#############################################################
+
+def get_ALLdiff(sample_set):
+
+    np_sample = sample_set.iloc[:,4].values
+    np_diff_sample = np.diff(np_sample)
+    X = np.array(range(99))
+    
+    diff_std = np_diff_sample.std()
+    diff_mean = np_diff_sample.mean()
+
+    plt.plot(X, np_diff_sample)
+    plt.show()
+
+    return diff_mean , diff_std
 
 
 ##############################################################
@@ -271,56 +347,29 @@ else :
 ###                   Fullのサンプルブロックを作る             ###
 ##############################################################
 
-sample_block = get_full_sample_fromALLrate(df,100)
-for i in sample_block:
-    under_Threshold , over_Threshold , sample_high_volatility = get_Theshold(i)
-    len_high_volatility = len(sample_high_volatility)
+sample_blocks = get_full_sample_fromALLrate(df,100)
 
-    if len_high_volatility == 0:
-        print("NO HIGH VOLATILITY about thins samples")
-    else :
-        index_highVola = get_highVolatility_index(sample_high_volatility)
-        print(index_highVola)
+# 100ごとのsampleブロックから、しきい値を検出し、high_Vola のaroudをgetする
+for i in sample_blocks:
+
+    under_Threshold , over_Threshold = get_Theshold(i)
+    
+    diff_mean, diff_std = get_ALLdiff(i)
+    
+    highVola_index = get_highVolatility_index(i , under_Threshold , over_Threshold)
+
+    # 分散が大きい大きいindexが存在しなかったらパスする
+    if len(highVola_index) == 0:
+        None
+    else:
         
-print(under_Threshold, over_Threshold)
-print("debug")
-
-
-
-
-
-##############################################################
-###          分散が大きいindexを1000持ってくる                 ###
-##############################################################
-
-def get_index_highVola_forTrain():
-    temp_train_index_highVola = []
-    SAMPLE_SIZE = 100
-    is_while = 0
-    HIGHVOLASIZE = 100
-
-    while(is_while < HIGHVOLASIZE):
-
-        sample_set , sample_date = get_rand_sample_fromALLrate(df,SAMPLE_SIZE)
-        under_Threshold , over_Threshold , sample_high_volatility = get_Theshold(sample_set)
-        len_high_volatility = len(sample_high_volatility)
+        highVola_Blocks = get_high_vola_Blocks(df, highVola_index)
+            
+        diff_blocks = get_diff1_from_Blocks(highVola_Blocks)
         
-        if len_high_volatility == 0:
-            #print("NO HIGH VOLATILITY about thins samples")
-            None
-        else :
-            index_highVola = get_highVolatility_index(sample_high_volatility)
-        
-        temp_train_index_highVola.append(index_highVola)    # while loop判定用
 
-        
-        is_while = len(list(chain.from_iterable(temp_train_index_highVola)))
 
-    train_index_highVola = list(chain.from_iterable(temp_train_index_highVola))
-    sorted_list = list(set(train_index_highVola))
+    
 
-    return sorted_list
 
-highVola_index_list = get_index_highVola_forTrain()
 
-classify_volatility(highVola_index_list, df)
