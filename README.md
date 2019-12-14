@@ -23,7 +23,7 @@
 | 上げ | 上げ |
 
 ## X と yについて
-### input を　intense before
+### input を　intense before と、1 sampleset自体が↗なのか、↘なのか。
 ### output を intense afterとする
 高い分散を観測した後に、どう動くのかを予想したい  
 なので、観測前をinputととして、outputを予想できないかという発想
