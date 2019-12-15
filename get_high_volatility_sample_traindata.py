@@ -120,7 +120,7 @@ def get_high_vola_Blocks(df , high_vola_index):
     for i in high_vola_index:
         df_high_vola = df.iloc[ i-6:i+6, :]  
         df_high_vola_Blocks.append(df_high_vola)
-
+        
     return df_high_vola_Blocks
 
 ##############################################################
@@ -169,6 +169,8 @@ def get_diff_1(sample):
 
 ##############################################################
 ###                nparrayの階差関数をつかって                ###
+###     inputのblocksがpandasを要素とするlistなので            ###
+###     　　　　　for 文をつかって要素に分解してあげる必要がある   ###
 ##############################################################
 
 def get_diff1_from_Blocks(blocks):
@@ -196,14 +198,60 @@ def get_ALLdiff(sample_set):
     diff_std = np_diff_sample.std()
     diff_mean = np_diff_sample.mean()
 
-    plt.plot(X, np_diff_sample)
-    plt.show()
+    point_1sigma_over = diff_mean + diff_std
+    point_1sigma_under = diff_mean - diff_std
+    point_2sigma_over = diff_mean + 2*diff_std
+    point_2sigma_under = diff_mean - 2*diff_std
 
-    return diff_mean , diff_std
+    ''' diffを棒グラフで表示する
+    plt.bar(X, np_diff_sample)
+    plt.show()
+    '''
+
+    return point_2sigma_under , point_2sigma_over
+
+
+############################################################
+###          diffを見て、それがintense or 緩やかを確認したい   ###
+###     sample 100ごとの diff　listを作ってそれのstdをとるか   ###
+#############################################################
+
+def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
+
+    np_diff_blocks = np.array(diff_blocks)
+    
+    print(type(diff_blocks))
+    print(type(np_diff_blocks))
+    print(len(np_diff_blocks))
+
+    print(point_2sigma_under)
+    print(point_2sigma_over)
+
+    print(diff_blocks)
+    
+    judged_array_under = np.where((point_2sigma_under<np_diff_blocks) , False , True)
+    judged_array_over = np.where((np_diff_blocks<point_2sigma_over) , False , True)
+
+    print(judged_array_under)
+    print(judged_array_over)
+    """
+    for i in np_diff_blocks:
+       # target_index = diff_blocks[5] ## 検出した瞬間のindex　前後での、isintenseを検出したいので大事
+
+        print(len(i))
+
+        for i in range( len(i) ): ## マクロで11を直接指定しても良き
+
+    """
+    print("break")
+
+
+
+
 
 
 ##############################################################
-###           　　　　　　　　連を確認する関数                ###
+###           　　　　　　　　連を確認する関数 　               ###
 ##############################################################
 
 def verify_for_seaqential(diff_1_nparray):
@@ -354,9 +402,11 @@ for i in sample_blocks:
 
     under_Threshold , over_Threshold = get_Theshold(i)
     
-    diff_mean, diff_std = get_ALLdiff(i)
     
     highVola_index = get_highVolatility_index(i , under_Threshold , over_Threshold)
+
+
+
 
     # 分散が大きい大きいindexが存在しなかったらパスする
     if len(highVola_index) == 0:
@@ -367,7 +417,10 @@ for i in sample_blocks:
             
         diff_blocks = get_diff1_from_Blocks(highVola_Blocks)
         
+        point_2sigma_under, point_2sigma_over = get_ALLdiff(i)
 
+        is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks)
+    
 
     
 
