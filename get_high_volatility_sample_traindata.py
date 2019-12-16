@@ -208,14 +208,167 @@ def get_ALLdiff(sample_set):
     plt.show()
     '''
 
-    return point_2sigma_under , point_2sigma_over
+    return point_1sigma_under , point_1sigma_over
+
+
+
+
+
+############################################################
+###          numpyを使わず普通のリストで行う                  ###
+###          diffを見て、それがintense or 緩やかを確認したい   ###
+###     sample 100ごとの diff　listを作ってそれのstdをとるか   ###
+#############################################################
+
+def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
+
+    is_under_before = 0
+    is_under_after = 0
+    is_over_before = 0
+    is_over_after = 0
+
+    classified_each_blocks = []
+    # FF -> ~~
+    # FU -> ~↗
+    # FD -> ~↘
+    # UF -> ↗~
+    # UU -> ↗↗
+    # UD -> ↗↘
+    # DF -> ↘~
+    # DU -> ↘↗
+    # DD -> ↘↘
+    # EE -> [-6 0] or [0 6]の短い間にupdownのいづれも経験すること　多分そんなことはないと思うが。。。
+
+    under_indexs_each = []
+    over_indexs_each = []
+    under_indexs_SAMPLE = []
+    over_indexs_SAMPLE = []
+
+    print("***  start  ***")
+    print(len(diff_blocks))
+
+    print(point_2sigma_under)
+    print(point_2sigma_over)
+
+    ## [-6 6]のdiff blockが複数個あるのでまずはそれを取り出すfor文
+    for each_block in diff_blocks:
+
+        print(each_block)
+
+        #[-6 6]の中を回すfor文
+        for i in range(len(each_block)):
+
+            #[-6 6]の中から、under Thresholdを検出しに行く
+            if each_block[i] < point_2sigma_under:
+                under_indexs_each.append(i)
+                if i<=5:
+                    is_under_before = 1
+                else:
+                    is_under_after = 1
+            else :
+                None
+
+            #[-6 6]の中から over Thresholdを検出しに行く
+            if each_block[i] > point_2sigma_over:
+                over_indexs_each.append(i)
+                if i<=5:
+                    is_over_before = 1
+                else:
+                    is_over_after = 1
+            else :
+                None
+
+        # beforeがいづれもフラット
+        if (is_under_before==0) and (is_over_before==0):
+            
+            if (is_under_after==0) and (is_over_after==0):
+                classified_each_blocks.append('FF')
+            elif (is_under_after==0) and (is_over_after==1):
+                classified_each_blocks.append('FU')
+            elif (is_under_after==1) and (is_over_after==0):
+                classified_each_blocks.append('FD')
+            else:
+                classified_each_blocks.append("FV")
+        
+        # beforeがUPのとき
+        elif (is_under_before==0) and (is_over_before == 1):
+            
+            if (is_under_after==0) and (is_over_after==0):
+                classified_each_blocks.append('UF')
+            elif (is_under_after==0) and (is_over_after==1):
+                classified_each_blocks.append('UU')
+            elif (is_under_after==1) and (is_over_after==0):
+                classified_each_blocks.append('UD')
+            else:
+                classified_each_blocks.append("UV")
+    
+        # beforeがDOWNのとき
+        elif (is_under_before==1) and (is_over_before == 0):
+            
+            if (is_under_after==0) and (is_over_after==0):
+                classified_each_blocks.append('DF')
+            elif (is_under_after==0) and (is_over_after==1):
+                classified_each_blocks.append('DU')
+            elif (is_under_after==1) and (is_over_after==0):
+                classified_each_blocks.append('DD')
+            else:
+                classified_each_blocks.append("DV")
+        
+        else:
+            if (is_under_after==0) and (is_over_after==0):
+                classified_each_blocks.append('VF')
+            elif (is_under_after==0) and (is_over_after==1):
+                classified_each_blocks.append('VU')
+            elif (is_under_after==1) and (is_over_after==0):
+                classified_each_blocks.append('VD')
+            else:
+                classified_each_blocks.append("VV")
+
+        under_indexs_SAMPLE.append(under_indexs_each)
+        over_indexs_SAMPLE.append(over_indexs_each)
+
+        under_indexs_each = []
+        over_indexs_each = []
+
+        print("under before" , is_under_before)
+        print("over before" ,is_over_before)
+        print("under after" ,is_under_after)
+        print("over after" ,is_over_after)
+
+        print(classified_each_blocks)
+        print("***  end  ***")
+
+        print("break")
+
+        is_under_before = 0
+        is_under_after = 0
+        is_over_before =0
+        is_over_after =0
+
+
+    print("under before" , is_under_before)
+    print("over before" ,is_over_before)
+    print("under after" ,is_under_after)
+    print("over after" ,is_over_after)
+    print(under_indexs_SAMPLE)
+    print(over_indexs_SAMPLE)
+
+    print("break")
+
+
+
+
+
+
+
+
 
 
 ############################################################
 ###          diffを見て、それがintense or 緩やかを確認したい   ###
 ###     sample 100ごとの diff　listを作ってそれのstdをとるか   ###
 #############################################################
-
+"""
 def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
 
     np_diff_blocks = np.array(diff_blocks)
@@ -232,9 +385,12 @@ def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
     judged_array_under = np.where((point_2sigma_under<np_diff_blocks) , False , True)
     judged_array_over = np.where((np_diff_blocks<point_2sigma_over) , False , True)
 
-    print(judged_array_under)
-    print(judged_array_over)
-    """
+    print("JJJ" , np.where(np_diff_blocks < point_2sigma_under) )
+    print("KKK" , np.where(np_diff_blocks > point_2sigma_over) )
+
+    print("break")
+
+    
     for i in np_diff_blocks:
        # target_index = diff_blocks[5] ## 検出した瞬間のindex　前後での、isintenseを検出したいので大事
 
@@ -242,10 +398,8 @@ def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
 
         for i in range( len(i) ): ## マクロで11を直接指定しても良き
 
-    """
-    print("break")
-
-
+"""
+    
 
 
 
