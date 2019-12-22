@@ -327,80 +327,49 @@ def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
         under_indexs_SAMPLE.append(under_indexs_each)
         over_indexs_SAMPLE.append(over_indexs_each)
 
+        # 1つのSAMPLE群の eachごとにリセットする
         under_indexs_each = []
         over_indexs_each = []
-
-        print("under before" , is_under_before)
-        print("over before" ,is_over_before)
-        print("under after" ,is_under_after)
-        print("over after" ,is_over_after)
-
-        print(classified_each_blocks)
-        print("***  end  ***")
-
-        print("break")
 
         is_under_before = 0
         is_under_after = 0
         is_over_before =0
         is_over_after =0
 
-
+    '''
     print("under before" , is_under_before)
     print("over before" ,is_over_before)
     print("under after" ,is_under_after)
     print("over after" ,is_over_after)
     print(under_indexs_SAMPLE)
     print(over_indexs_SAMPLE)
+    print(classified_each_blocks)
+    '''
 
-    print("break")
-
-
-
-
+    return classified_each_blocks
 
 
 
+##############################################################
+###           　  　　　データを作るために加工する               ###
+##############################################################
 
+def get_pandasDF_for_train(diff_blocks, classified_each_blocks, DF_train):
 
+    #print("~~~ PD ~~~")
+    #print(classified_each_blocks)
+    #print(type(classified_each_blocks))
 
-############################################################
-###          diffを見て、それがintense or 緩やかを確認したい   ###
-###     sample 100ごとの diff　listを作ってそれのstdをとるか   ###
-#############################################################
-"""
-def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
+    #print(DF_train)
+    #print("break")
 
-    np_diff_blocks = np.array(diff_blocks)
-    
-    print(type(diff_blocks))
-    print(type(np_diff_blocks))
-    print(len(np_diff_blocks))
+    for i in classified_each_blocks:
 
-    print(point_2sigma_under)
-    print(point_2sigma_over)
-
-    print(diff_blocks)
-    
-    judged_array_under = np.where((point_2sigma_under<np_diff_blocks) , False , True)
-    judged_array_over = np.where((np_diff_blocks<point_2sigma_over) , False , True)
-
-    print("JJJ" , np.where(np_diff_blocks < point_2sigma_under) )
-    print("KKK" , np.where(np_diff_blocks > point_2sigma_over) )
-
-    print("break")
+        tmp_se = pd.Series( i , index=DF_train.columns )
+        DF_train = DF_train.append( tmp_se, ignore_index=True )
 
     
-    for i in np_diff_blocks:
-       # target_index = diff_blocks[5] ## 検出した瞬間のindex　前後での、isintenseを検出したいので大事
-
-        print(len(i))
-
-        for i in range( len(i) ): ## マクロで11を直接指定しても良き
-
-"""
-    
-
+    return DF_train
 
 
 
@@ -422,104 +391,6 @@ def verify_for_seaqential(diff_1_nparray):
             print("OK")
         else :
             print("NG") 
-
-
-
-
-##############################################################
-###             　分散の検出が、じわじわか、stayか      ###
-##############################################################
-def is_intense_before_highVola(highVola_rate_list):
-    diff_rate = []
-
-    UNDER = -0.06
-    OVER = 0.06
-    is_intense_before = 0
-    is_bounce_after = 0
-
-    list_is_intense_before = []
-    list_is_bounce_after = []
-
-    shortloopcnt = 0
-    
-    for i in highVola_rate_list:
-        temp = np.array(i)
-        diff_rate = np.diff(temp)
-        #is_intense_array  = np.where( (diff_rate < UNDER) | (OVER < diff_rate))
-        
-
-        # diff が 0.06より大きいか小さいかで、 激しいのかどうかジャッジ
-        # loopカウントが 3未満のときは、highVola検出の前　つまり、急にhighVolaになったのかじわじわなのか見極める
-        # loopカウントが 4以上のときは、highVola検出の後　つまりhighVolaのあとにstayか、bounceか見極める
-        for val in diff_rate:
-            if shortloopcnt <= 3:
-                if val < UNDER :
-                    is_intense_before = 1
-                elif val > OVER :
-                    is_intense_before = 2
-                else :
-                    is_intense_before = 0
-            else :
-                if val < UNDER :
-                    is_bounce_after = 1
-                elif val > OVER :
-                    is_bounce_after = 2
-                else :
-                    is_bounce_after = 0
-
-            shortloopcnt = shortloopcnt + 1    
-        
-        list_is_intense_before.append(is_intense_before)
-        list_is_bounce_after.append(is_bounce_after)
-        shortloopcnt = 0
-        
-        print("break")
-        
-    return list_is_intense_before , list_is_bounce_after
-
-##############################################################
-###             　分散が大きくなったあと、bounce　か　stay      ###
-##############################################################
-def is_bounce_after_highVola():
-    print(" temp ")
-
-
-##############################################################
-###             　分散がcandleの前後を撮ってくる               ###
-###        サブのメソッドでじわじわ分散が大きくなったのか確認     ###
-###        サブのメソッドで分散が大きくなったあとstayがbounceか確認     ###
-##############################################################
-
-
-def classify_volatility(highVolasample,df):
-
-    ALL_highVola_index_diff_list = []
-    EACH_highVola_index_diff_list = []
-    
-    ''' pandasで訓練データセットを作りたい '''
-    ''' highVolasampleのindex '''
-    ''' open価格 '''
-    ''' 正解は、is_intense_before 、is_bounce_afterの組み合わせ '''
-    
-    ''' diffを持ってこないと '''
-    
-    # highVolaリストを回す
-    for i in highVola_index_list:
-        # highVolaのアラウンド 4を拾ってきてそれを新たなリストにする
-        for j in range(-4,5):
-            EACH_highVola_index_diff_list.append( df.iat[i+j,4])
-        
-        # 新たなリストを作ったら[ [-4:4], [-4:4], ... , [-4,4] ]
-        ALL_highVola_index_diff_list.append(EACH_highVola_index_diff_list)
-        
-        EACH_highVola_index_diff_list = [] # ラウンド用のtempをクリアする
-
-    list_is_intense_before, list_is_bounce_after = is_intense_before_highVola(ALL_highVola_index_diff_list)
-    
-    print(ALL_highVola_index_diff_list)
-    print(list_is_intense_before)
-    print(list_is_bounce_after)
- 
 
 
 ###################################################################################
@@ -552,6 +423,9 @@ else :
 sample_blocks = get_full_sample_fromALLrate(df,100)
 
 # 100ごとのsampleブロックから、しきい値を検出し、high_Vola のaroudをgetする
+
+DF_train = pd.DataFrame( columns=['category'] ) #このdataFrameに対して、for文の中でデータを追加していく
+
 for i in sample_blocks:
 
     under_Threshold , over_Threshold = get_Theshold(i)
@@ -573,10 +447,13 @@ for i in sample_blocks:
         
         point_2sigma_under, point_2sigma_over = get_ALLdiff(i)
 
-        is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks)
+        classified_each_blocks = is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks)
     
+        # pandas DFをmain文で定義して、DFを引数としてpandas作成関数に渡す
+        # こうすることによって、違うSAMPLE BLOCKSに対しても同じDFにデータを入れることができる
+        
+        DF_train = get_pandasDF_for_train(diff_blocks, classified_each_blocks, DF_train)
 
-    
-
+print(DF_train)
 
 
