@@ -6,8 +6,8 @@ from itertools import chain
 
 
 # たまには絶対パス指定
-df = pd.read_csv('/Users/apple/python/oanda/input_USDJPY_CSV/USDJPY_10m_after2014.csv')
-#df = pd.read_csv('/Users/apple/python/oanda/input_USDJPY_CSV/for_debug__USDJPY_10m_after2014.csv')
+#df = pd.read_csv('/Users/apple/python/oanda/input_USDJPY_CSV/USDJPY_10m_after2014.csv')
+df = pd.read_csv('/Users/apple/python/oanda/input_USDJPY_CSV/for_debug__USDJPY_10m_after2014.csv')
 df_len = len(df)
 df.head()
 
@@ -127,6 +127,77 @@ def get_high_vola_Blocks(df , high_vola_index):
         
     return df_high_vola_Blocks
 
+
+##############################################################
+###           diffの連続性を確認するための関数                ###
+###           4連続だったら、Seqフラグをセットする               ###
+###           引数は、np array 　　　　　　　　                ###
+###           返り値は、before afterの連続数　                ###
+##############################################################
+
+def get_Sequencial(diff_block):
+    
+    len_diff_block = len(diff_block)
+    
+    cnt_before_p = 0
+    cnt_before_m = 0
+    cnt_after_p = 0
+    cnt_after_m = 0
+    f_before_p = 0
+    f_before_m = 0
+    f_after_p = 0
+    f_after_m = 0
+
+    for i in range(len_diff_block):
+        if i <= 5:
+            ##### before #####
+            if diff_block[i] >= 0:
+                if f_before_p == 1:
+                    cnt_before_p = cnt_before_p + 1
+                else :
+                    #cnt_before_p = 0
+                    None
+                f_before_p = 1
+                f_before_m = 0
+
+            else :
+                if f_before_m == 1:
+                    cnt_before_m = cnt_before_m + 1
+                else :
+                    #cnt_before_m = 0
+                    None
+                
+                f_before_m = 1
+                f_before_p = 0
+
+        else:
+            ##### after #####
+            if diff_block[i] >= 0:
+                if f_after_p == 1:
+                    cnt_after_p = cnt_after_p + 1
+                else :
+                    cnt_after_p = 0
+                
+                f_after_p = 1
+                f_after_m = 0
+
+            else :
+                if f_after_m == 1:
+                    cnt_after_m = cnt_after_m + 1
+                else :
+                    cnt_after_m = 0
+                
+                f_after_m = 1
+                f_after_p = 0
+    
+    print(diff_block)
+    print("cbp",cnt_before_p)
+    print("cbm",cnt_before_m)
+    print("cap",cnt_after_p)
+    print("cam",cnt_after_m)
+    print("break")
+
+    return cnt_before_p, cnt_before_m, cnt_after_p, cnt_after_m
     
 ##############################################################
 ###           1階差をとり、nparrayに変換する関数                ###
@@ -134,22 +205,50 @@ def get_high_vola_Blocks(df , high_vola_index):
 
 # 引数　pandas
 # 返り値　nparray
-def get_diff_1(sample):
+def get_diff_1_ALLrate(sample):
     
-    open_array = sample[0].iloc[:,4].values
-    diff_1_list = []
-    j = 0
-    for i in open_array:
-        if j == 0:
-            None
-        else:
-            diff_1_list.append(i - j)
+    np_open_array = sample.iloc[:,4].values
+    temp_np_open_diff = np.diff(np_open_array)
+    np_open_diff = np.round(temp_np_open_diff, 3)
+    np_open_diff = np.insert(np_open_diff, 0, 0)
+
+    print(np_open_diff)
+    print("break")
+
+    return np_open_diff
+
+
+##############################################################
+###                [-6:6]のブロックの1階差を取る               ###
+###     inputのblocksがpandasを要素とするlistなので            ###
+###     　　　　　for 文をつかって要素に分解してあげる必要がある    ###
+##############################################################
+def get_diff1_from_HIGHVOLA_Blocks(blocks):
+
+    diff_each_blocks = []
+    list_cnt_before_p = []
+    list_cnt_before_m = []
+    list_cnt_after_p = []
+    list_cnt_after_m = []
+
+    if (type(blocks) == list):
+        for i in blocks:
+            # 1階差のdiffをlistに入れる。　1つのsampleブロックにつき、何回激しい分散が来ても対応できるように
+            np_blocks = i.iloc[:,4].values
+            diff_each_blocks.append( np.diff(np_blocks) )
+            
+            cnt_before_p, cnt_before_m, cnt_after_p, cnt_after_m = get_Sequencial( np.diff(np_blocks) )
         
-        j = i
+            list_cnt_before_p.append(cnt_before_p)
+            list_cnt_before_m.append(cnt_before_m)
+            list_cnt_after_p.append(cnt_after_p)
+            list_cnt_after_m.append(cnt_after_m)
 
-    diff_1_nparray = np.array(diff_1_list)
+    else:
+        None
+    
+    return diff_each_blocks, list_cnt_before_p, list_cnt_before_m, list_cnt_after_p, list_cnt_after_m 
 
-    return diff_1_nparray
 
 
 ##############################################################
@@ -158,27 +257,31 @@ def get_diff_1(sample):
 ###     　　　　　for 文をつかって要素に分解してあげる必要がある   ###
 ##############################################################
 
-def get_diff1_from_Blocks(blocks):
+def get_diff1_from_SAMPLE_Blocks(blocks , finalrate_in_sample):
 
     diff_each_blocks = []
 
-    for i in blocks:
-        np_blocks = i.iloc[:,4].values
-        diff_each_blocks.append( np.diff(np_blocks) )
+    # numpy array  から listに変換する
+    # diff をとった後に丸め誤差を考慮する必要がある
+    # listの中に、numpy arrayがひとつ入っているのはだめなので、要素を分解してlistにする
+    # listの先頭に0を追加しているのは、pandas DFに入れるときにどことのdiffとってるんやお前状態になるのを避けるため
+    np_blocks = blocks.iloc[:,4].values
+    tmp_np_diff = np.diff(np_blocks)
+    np_diff = np.round(tmp_np_diff, 3)
+    diff_each_blocks = np_diff.tolist()
+    diff_each_blocks.insert(0, 0)
 
     return diff_each_blocks
-
 
 ############################################################
 ###          diffを見て、それがintense or 緩やかを確認したい   ###
 ###     sample 100ごとの diff　listを作ってそれのstdをとるか   ###
 #############################################################
 
-def get_ALLdiff(sample_set , size_sigma):
+def get_Limit_Each_Blocks(sample_set , size_sigma):
 
     np_sample = sample_set.iloc[:,4].values
     np_diff_sample = np.diff(np_sample)
-    X = np.array(range(99))
     
     diff_std = np_diff_sample.std()
     diff_mean = np_diff_sample.mean()
@@ -200,7 +303,7 @@ def get_ALLdiff(sample_set , size_sigma):
 ###     sample 100ごとの diff　listを作ってそれのstdをとるか   ###
 #############################################################
 
-def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
+def get_Is_Intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
 
     is_under_before = 0
     is_under_after = 0
@@ -208,6 +311,8 @@ def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
     is_over_after = 0
 
     classified_each_blocks = []
+    classified_each_blocks_before = []
+    classified_each_blocks_after = []
     # FF -> ~~
     # FU -> ~↗
     # FD -> ~↘
@@ -219,10 +324,10 @@ def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
     # DD -> ↘↘
     # EE -> [-6 0] or [0 6]の短い間にupdownのいづれも経験すること　多分そんなことはないと思うが。。。
 
-    under_indexs_each = []
-    over_indexs_each = []
-    under_indexs_SAMPLE = []
-    over_indexs_SAMPLE = []
+    under_indexs_each = []      #diffブロック[-6,6]に対してすべて しきい値超えを判定する
+    over_indexs_each = []       #diffブロック[-6,6]に対してすべて しきい値超えを判定する
+    under_indexs_SAMPLE = []    #上のdiffブロック[-6,6]を1SAMPLEごとに持つ [[-6,6],[-6,6] , ,,]
+    over_indexs_SAMPLE = []     #上のdiffブロック[-6,6]を1SAMPLEごとに持つ [[-6,6],[-6,6] , ,,]
 
     ## [-6 6]のdiff blockが複数個あるのでまずはそれを取り出すfor文
     for each_block in diff_blocks:
@@ -250,6 +355,7 @@ def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
             else :
                 None
 
+        """
         # beforeがいづれもフラット
         if (is_under_before==0) and (is_over_before==0):
             
@@ -295,6 +401,30 @@ def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
                 classified_each_blocks.append('VD')
             else:
                 classified_each_blocks.append("VV")
+        
+        """
+        
+        ## beforeのクラス分け
+        ## 1Sampleあたりにつき複数のdiffブロックがあるので、一つごとに
+        if (is_under_before==0) and (is_over_before==0):
+            classified_each_blocks_before.append('F')
+        elif (is_under_before==0) and (is_over_before == 1):
+            classified_each_blocks_before.append('U')
+        elif (is_under_before==1) and (is_over_before == 0):
+            classified_each_blocks_before.append('D')
+        else:
+            classified_each_blocks_before.append('V')
+
+        ## afterのクラス分け
+        ## 1Sampleあたりにつき複数のdiffブロックがあるので、一つごとに
+        if (is_under_after==0) and (is_over_after==0):
+            classified_each_blocks_after.append('F')
+        elif (is_under_after==0) and (is_over_after==1):
+            classified_each_blocks_after.append('U')
+        elif (is_under_after==1) and (is_over_after==0):
+            classified_each_blocks_after.append('D')
+        else:
+            classified_each_blocks_after.append("V")
 
         under_indexs_SAMPLE.append(under_indexs_each)
         over_indexs_SAMPLE.append(over_indexs_each)
@@ -308,17 +438,17 @@ def is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks):
         is_over_before =0
         is_over_after =0
 
-    return classified_each_blocks
+    return classified_each_blocks_before , classified_each_blocks_after
 
 ##############################################################
 ###           　  　　　データを作るために加工する               ###
 ##############################################################
 
-def get_pandasDF_for_train(diff_blocks, classified_each_blocks, DF_train):
+def get_pandasDF_for_train(diff_blocks, classified_each_blocks_before,classified_each_blocks_after ,cnt_before_p, cnt_before_m, cnt_after_p, cnt_after_m, DF_train):
 
-    for i in classified_each_blocks:
+    for i,j,k,l,m,n in zip(classified_each_blocks_before,classified_each_blocks_after, cnt_before_p, cnt_before_m, cnt_after_p, cnt_after_m):
 
-        tmp_se = pd.Series( i , index=DF_train.columns )
+        tmp_se = pd.Series( [i,j,k,l,m,n], index=DF_train.columns )
         DF_train = DF_train.append( tmp_se, ignore_index=True )
     
     return DF_train
@@ -359,50 +489,62 @@ SAMPLE_SIZE = 100
 
 csvfile_name_classified = 'classified_sample_' + str(SAMPLE_SIZE)
 
+DF_train = pd.DataFrame( columns=['category_Before','category_After','SeqBefore_p', 'SeqBefore_m', 'SeqAfter_p', 'SeqAfter_m', ] ) #このdataFrameに対して、for文の中でデータを追加していく
+
+all_index = []         # for input data to pandas すべてのサンプルのindexリスト 
+open_rate_list = []    # for input data to pandas 価格リスト
+diff_list_forDF = []   # for input data to pandas 一回差分
+
+###すべてのsampleからdiffのnumpy arrayを作成する
+print(df_len)
+np_all_diff = get_diff_1_ALLrate(df)
+
+# 100ごとのsampleブロックから、しきい値を検出し、high_Vola のaroud[-6:6]をgetする
+#SAMPLESIZEごとにサンプルを取ってくる。
+# DF → DF
 sample_blocks = get_full_sample_fromALLrate(df,SAMPLE_SIZE)
 
-# 100ごとのsampleブロックから、しきい値を検出し、high_Vola のaroudをgetする
-
-DF_train = pd.DataFrame( columns=['category'] ) #このdataFrameに対して、for文の中でデータを追加していく
-
-all_index = []
-rate_each_all_index = []
 
 for i in sample_blocks:
 
     under_Threshold , over_Threshold = get_Theshold(i)
     
     highVola_index , open_rate_vola = get_highVolatility_index(i , under_Threshold , over_Threshold)
-
+   
     for j,k in zip(highVola_index,open_rate_vola):
         all_index.append(j)
-        rate_each_all_index.append(k)
+        open_rate_list.append(k)
+        diff_list_forDF.append( np_all_diff[j] )
 
     # 分散が大きい大きいindexが存在しなかったらパスする
     if len(highVola_index) == 0:
         None
     else:
-        
+    
         highVola_Blocks = get_high_vola_Blocks(df, highVola_index)
             
-        diff_blocks = get_diff1_from_Blocks(highVola_Blocks)
+        diff_blocks_intense, list_cnt_before_p, list_cnt_before_m, list_cnt_after_p, list_cnt_after_m = get_diff1_from_HIGHVOLA_Blocks(highVola_Blocks)
         
-        point_2sigma_under, point_2sigma_over = get_ALLdiff(i , SIZE_SIGMA_DIFF)
+        point_2sigma_under, point_2sigma_over = get_Limit_Each_Blocks(i , SIZE_SIGMA_DIFF)
 
-        classified_each_blocks = is_intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks)
+        classified_each_blocks_before, classified_each_blocks_after = get_Is_Intense_diff(point_2sigma_under, point_2sigma_over, diff_blocks_intense)
     
         # pandas DFをmain文で定義して、DFを引数としてpandas作成関数に渡す
         # こうすることによって、違うSAMPLE BLOCKSに対しても同じDFにデータを入れることができる
         
-        DF_train = get_pandasDF_for_train(diff_blocks, classified_each_blocks, DF_train)
-
+        DF_train = get_pandasDF_for_train(diff_blocks_intense, classified_each_blocks_before, classified_each_blocks_after, list_cnt_before_p, list_cnt_before_m, list_cnt_after_p, list_cnt_after_m, DF_train)
 
 # カテゴリー分けを行ったpandasDFに対して、indexとrateの列を追加する
 # 必要はないが念の為
 tmp_se_index = pd.Series( all_index )
-tmp_se_rate = pd.Series( rate_each_all_index )
+tmp_se_rate = pd.Series( open_rate_list )
+tmp_se_diff = pd.Series( diff_list_forDF )
 DF_train["INDEX_ALL_SAMPLE"]=tmp_se_index
 DF_train["RATE"]=tmp_se_rate
+DF_train["DIFF"]=tmp_se_diff
+
+print(len(DF_train))
+print(DF_train)
 
 # CSVへと出力
-DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/%s.csv" % csvfile_name_classified)
+#DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/%s.csv" % csvfile_name_classified)
