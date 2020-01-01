@@ -4,13 +4,14 @@ import matplotlib.pyplot as plt
 import random
 from itertools import chain
 
+from tqdm import tqdm
 
 # たまには絶対パス指定
-#df = pd.read_csv('/Users/apple/python/oanda/input_USDJPY_CSV/USDJPY_10m_after2014.csv')
-df = pd.read_csv('/Users/apple/python/oanda/input_USDJPY_CSV/for_debug__USDJPY_10m_after2014.csv')
+df = pd.read_csv('/Users/apple/python/oanda/input_USDJPY_CSV/USDJPY_10m_after2014.csv')
+#df = pd.read_csv('/Users/apple/python/oanda/input_USDJPY_CSV/for_debug__USDJPY_10m_after2014.csv')
+#df = pd.read_csv('/Users/apple/python/oanda/input_USDJPY_CSV/for_debug__USDJPY_10m_after2014.csv')
 df_len = len(df)
-df.head()
-
+print(df.head())
 ##############################################################
 ###            ALLデータかランダムで100サンプル数だけ取得する      ###
 ##############################################################
@@ -189,13 +190,6 @@ def get_Sequencial(diff_block):
                 
                 f_after_m = 1
                 f_after_p = 0
-    
-    print(diff_block)
-    print("cbp",cnt_before_p)
-    print("cbm",cnt_before_m)
-    print("cap",cnt_after_p)
-    print("cam",cnt_after_m)
-    print("break")
 
     return cnt_before_p, cnt_before_m, cnt_after_p, cnt_after_m
     
@@ -211,9 +205,6 @@ def get_diff_1_ALLrate(sample):
     temp_np_open_diff = np.diff(np_open_array)
     np_open_diff = np.round(temp_np_open_diff, 3)
     np_open_diff = np.insert(np_open_diff, 0, 0)
-
-    print(np_open_diff)
-    print("break")
 
     return np_open_diff
 
@@ -496,7 +487,6 @@ open_rate_list = []    # for input data to pandas 価格リスト
 diff_list_forDF = []   # for input data to pandas 一回差分
 
 ###すべてのsampleからdiffのnumpy arrayを作成する
-print(df_len)
 np_all_diff = get_diff_1_ALLrate(df)
 
 # 100ごとのsampleブロックから、しきい値を検出し、high_Vola のaroud[-6:6]をgetする
@@ -504,13 +494,14 @@ np_all_diff = get_diff_1_ALLrate(df)
 # DF → DF
 sample_blocks = get_full_sample_fromALLrate(df,SAMPLE_SIZE)
 
+#for i in tqdm(range(sample_blocks)):
 
-for i in sample_blocks:
-
+for i in tqdm(sample_blocks):
+    
     under_Threshold , over_Threshold = get_Theshold(i)
     
     highVola_index , open_rate_vola = get_highVolatility_index(i , under_Threshold , over_Threshold)
-   
+
     for j,k in zip(highVola_index,open_rate_vola):
         all_index.append(j)
         open_rate_list.append(k)
@@ -544,7 +535,7 @@ DF_train["RATE"]=tmp_se_rate
 DF_train["DIFF"]=tmp_se_diff
 
 print(len(DF_train))
-print(DF_train)
+print(DF_train.head())
 
 # CSVへと出力
-#DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/%s.csv" % csvfile_name_classified)
+DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/%s.csv" % csvfile_name_classified)
