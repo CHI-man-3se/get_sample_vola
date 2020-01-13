@@ -48,32 +48,12 @@ def get_full_sample_fromALLrate(df , sample_size):
 ###    ここで、取得されるcandleはすでに大きいdiffがたされたあと    ###
 ##############################################################
 
-def get_Theshold(sample_set, change_limit):
+def get_Statistics_sample(sample_set):
 
     candle_std = sample_set['OPEN'].std()
     candle_mean = sample_set['OPEN'].mean()
 
-    if( change_limit==0 ):
-        std_line = candle_std
-    elif( change_limit==1 ):
-        std_line = 1.64*candle_std
-    elif( change_limit==2 ):
-        std_line = 1.96*candle_std
-    elif( change_limit==3 ):
-        std_line = 0.75*candle_std
-    elif( change_limit==4 ):
-        std_line = 0.50*candle_std
-    else:
-        None
-
-    under_Threshold = candle_mean - std_line
-    over_Threshold = candle_mean + std_line
-
-    true_under_Threshold = candle_mean - std_line
-    true_over_Threshold = candle_mean + std_line
-    
-    #return under_Threshold , over_Threshold
-    return true_under_Threshold , true_over_Threshold
+    return candle_mean , candle_std
 
 
 ##############################################################
@@ -82,8 +62,16 @@ def get_Theshold(sample_set, change_limit):
 
 def get_highVolatility_index(sample_set ,under_Threshold, over_Threshold):
 
+    ## highVolaの検出なしで、すべてのindexを持ってきたいときdropアルゴリズムによって終わる
+    ## なので、debug用としてあらたなdropアルゴリズムのパスをつくる
+    debug_ALL = 0
+    if under_Threshold==over_Threshold:
+        debug_ALL = 1
+    else:
+        debug_ALL = 0
+
     # high_volaのdataframeをゲット　※ほしいのはindexだけなので、それだけ貰えればいいかも
-    high_volatility = sample_set.query('OPEN < @under_Threshold or @over_Threshold < OPEN')
+    high_volatility = sample_set.query('OPEN <= @under_Threshold or @over_Threshold <= OPEN')
 
     sample_len = len(high_volatility)
     
@@ -96,31 +84,37 @@ def get_highVolatility_index(sample_set ,under_Threshold, over_Threshold):
 
     # 分散がでかくなった瞬間を持ってきたいので、連続indexが連続になっているのは省く
     # indexが連続しているのをdropさせるloop
-    if sample_len == 0 :
-        None
-    else:
-        
-        if 0<=index_num[0]<=6 : ## high vola検出のindexが6以下のときはeach blocksをけいせいできないためここもパスする
+    if debug_ALL == 0:    
+        if sample_len == 0 :
             None
         else:
-            drop_sequence_index = [index_num[0]] ## SAMPLE BLOCK100毎のhigh vola INDEXの先頭をreturn用のlistに追加する
-
-        for i in range(sample_len):
-
-            # listがオーバフローしないために
-            if i == sample_len-1:
+            
+            if 0<=index_num[0]<=6 : ## high vola検出のindexが6以下のときはeach blocksを形成できないためここもパスする
                 None
-            elif 0<=index_num[i]<=1 : ## high vola検出のindexが6以下のときはeach blocksをけいせいできないためここもパスする
-                None
-            else :  ##連続している、indexを省く
-                is_sequence = index_num[i+1] - index_num[i]
+            else:
+                drop_sequence_index = [index_num[0]] ## SAMPLE BLOCK100毎のhigh vola INDEXの先頭をreturn用のlistに追加する
 
-                # 連続しているindexは省き、分散がでかくなった瞬間のindexを持ってくる
-                if is_sequence < 6:
+            for i in range(sample_len):
+
+                # listがオーバフローしないために
+                if i == sample_len-1:
                     None
-                else:
-                    drop_sequence_index.append(index_num[i+1])
+                elif 0<=index_num[i]<=1 : ## high vola検出のindexが6以下のときはeach blocksをけいせいできないためここもパスする
+                    None
+                else :  ##連続している、indexを省く
+                    is_sequence = index_num[i+1] - index_num[i]
 
+                    # 連続しているindexは省き、分散がでかくなった瞬間のindexを持ってくる
+                    if is_sequence < 6:
+                        None
+                    else:
+                        drop_sequence_index.append(index_num[i+1])
+    elif debug_ALL == 1:
+        index_debug = np.arange(6, 97, 12)
+        for i in index_debug:
+            drop_sequence_index.append(index_num[i])
+    else:
+        None
 
     for i in drop_sequence_index:
         rate = high_volatility.loc[i,'OPEN']
@@ -298,7 +292,7 @@ def get_diff1_from_SAMPLE_Blocks(blocks , finalrate_in_sample):
 ###     sample 100ごとの diff の平均をベースに、しきい値を取る   ###
 #############################################################
 
-def get_Limit_Each_Blocks(sample_set , change_sw):
+def get_diff_Limit_Each_Blocks(sample_set):
 
     np_sample = sample_set.iloc[:,2].values
     np_diff_sample = np.diff(np_sample)
@@ -306,18 +300,7 @@ def get_Limit_Each_Blocks(sample_set , change_sw):
     diff_std_each = np_diff_sample.std()
     diff_mean_each = np_diff_sample.mean()
 
-    if change_sw == 0: 
-        diff_limit_relative = diff_mean_each + 0*diff_std_each
-    elif change_sw == 1:
-        diff_limit_relative = diff_mean_each + 1.0*diff_std_each
-    elif change_sw == 2:
-        diff_limit_relative = diff_mean_each + 1.64*diff_std_each
-    elif change_sw == 3:
-        diff_limit_relative = diff_mean_each + 1.96*diff_std_each
-    elif change_sw == 4:
-        diff_limit_relative = diff_mean_each + 0.75*diff_std_each
-    else:
-        None
+    diff_limit_relative = round(diff_std_each, 4)
 
     return diff_mean_each, diff_limit_relative 
 
@@ -327,7 +310,7 @@ def get_Limit_Each_Blocks(sample_set , change_sw):
 ###     sample 100ごとの diff　listを作ってそれのstdをとるか   ###
 #############################################################
 
-def get_Is_Intense_diff(diff_limit, diff_blocks):
+def get_Categoly_diff(diff_limit, diff_blocks):
 
     is_under_before = 0
     is_under_after = 0
@@ -450,15 +433,6 @@ def get_Is_Intense_diff(diff_limit, diff_blocks):
         else:
             classified_diff_after.append("F_diff")
 
-    print(diff_limit)
-
-    print(open_diff)
-    print(close_diff)
-    print(classified_each_blocks_before)
-    print(classified_each_blocks_after)
-    print(classified_diff_before)
-    print(classified_diff_after)
-
     return classified_each_blocks_before , classified_each_blocks_after, open_diff ,close_diff, classified_diff_before, classified_diff_after
 
 ##############################################################
@@ -503,6 +477,7 @@ def get_pandasDF_for_train(diff_blocks,
 ###################################################################################
 ###################################################################################
 
+
 ##############################################################
 ###                   Fullのサンプルブロックを作る             ###
 ##############################################################
@@ -524,34 +499,32 @@ df_len = len(df)
 
 SIZE_SIGMA_DIFF = 1     ## each diffのしきい値を　2sigmaにするか、1sigmaにするか
 SAMPLE_SIZE = 100       ## 1サンプルの数
-Change_Theshold_rate_sw = 1     ## rateの high volaを検出するときのしきい値
+Change_Theshold_rate_sw = 100   ## rateの high volaを検出するときのしきい値
                                 ## 0 → 標準偏差*1 
                                 ## 1 → 標準偏差*1.64 
                                 ## 2 → 標準偏差*1.96 
                                 ## 3 → 標準偏差*0.75 
                                 ## 4 → 標準偏差*0.50 
+                                ## 100 → 0 すなわち、すべてのデータを取ってくる 
 
 diff_sw = 0                     ## diffが 大きいのかどうかを判断するためのdiff
                                 ## 0 → relative 1sample(100)ごとに、diffの平均をとって、しきい値を決めている
                                 ## 1 → absolute 2001〜2019のすべての平均値を採用
 
 Change_Theshold_diff_sw = 0     ## diffの high volaを検出するときのしきい値
-                                ## 0 → 平均 
-                                ## 1 → 平均 + 標準偏差*1
-                                ## 2 → 平均 + 標準偏差*1.64 
-                                ## 3 → 平均 + 標準偏差*1.96 
-                                ## 4 → 平均 + 標準偏差*0.75 
-
-
+                                ## 0 → 平均 + 標準偏差*1
+                                ## 1 → 平均 + 標準偏差*1.64 
+                                ## 2 → 平均 + 標準偏差*1.96 
+                                ## 3 → 平均 + 標準偏差*0.75 
+                                ## 4 → 平均 + 標準偏差*0.50 
 
 ## しきい値、基準は別途計算した統計値 ##
 DIFF_MEAN_ABSOLUTE = 0.051887    ## all diff　すべてのサンプル2001~2019でのdiffの平均
 
+
+
 ### 出力DFのカテゴリ名を指定 ###
 DF_train = pd.DataFrame( columns=['extreme_point','category_Before','category_After','diff_open','diff_close','classdiff_before','classdiff_after','SeqBefore_p','SeqBefore_m', 'SeqAfter_p', 'SeqAfter_m'] ) #このdataFrameに対して、for文の中でデータを追加していく
-
-### 出力ファイルの名前 ###
-csvfile_name_classified = 'classified_sample_' + str(SAMPLE_SIZE)
 
 all_index = []         # for input data to pandas すべてのサンプルのindexリスト 
 open_rate_list = []    # for input data to pandas 価格リスト
@@ -569,10 +542,35 @@ sample_blocks = get_full_sample_fromALLrate(df,SAMPLE_SIZE)
 ## 1Sampleごとのループ 1SAMPLEの大きさは100
 for i in tqdm(sample_blocks):
     
-    ## 1 Sample Blockからしきい値をget
-    ## しきい値は、Theshold_swによって大きさを
-    under_Threshold , over_Threshold = get_Theshold(i, Change_Theshold_rate_sw)
-    
+    ## 1 Sample Blockから、rateの 平均/分散を取得
+    ## configによって、high volaを検出するしきい値を変更する
+    candle_mean , candle_std = get_Statistics_sample(i)
+
+    if( Change_Theshold_rate_sw==0 ):
+        std_line = candle_std
+        Name_rate_sw = 'RATE_THRESHOLD1_0'
+    elif( Change_Theshold_rate_sw==1 ):
+        std_line = 1.64*candle_std
+        Name_rate_sw = 'RATE_THRESHOLD1_64'
+    elif( Change_Theshold_rate_sw==2 ):
+        std_line = 1.96*candle_std
+        Name_rate_sw = 'RATE_THRESHOLD1_96'
+    elif( Change_Theshold_rate_sw==3 ):
+        std_line = 0.75*candle_std
+        Name_rate_sw = 'RATE_THRESHOLD0_75'
+    elif( Change_Theshold_rate_sw==4 ):
+        std_line = 0.50*candle_std
+        Name_rate_sw = 'RATE_THRESHOLD0_50'
+    elif( Change_Theshold_rate_sw==100 ):
+        std_line = 0*candle_std
+        Name_rate_sw = 'RATE_THRESHOLD_NONE'
+    else:
+        None
+
+    under_Threshold = candle_mean - std_line
+    over_Threshold = candle_mean + std_line
+
+
     ## 1 Sample Blockから、しきい値超えのINDEXをget 連続値は省き、aroudはまだ
     ## DF to list(index)
     highVola_index , open_rate_vola , extreme_point = get_highVolatility_index(i, under_Threshold , over_Threshold)
@@ -598,15 +596,40 @@ for i in tqdm(sample_blocks):
         
         ## 1 Sample listから、激しいdiffであるという根拠のしきい値をとる
         ## DF to value
-        diff_mean_each, diff_relative = get_Limit_Each_Blocks(i , Change_Theshold_diff_sw)
+        diff_mean_each, diff_relative = get_diff_Limit_Each_Blocks(i)
 
-        '''しきい値を、each diffにするか all diffにするか'''
+        ''' diffに関するチューニング '''
+        ## Relativeにするか、ABSOLUTEにするか
+        ## 出力ファイルの名前も
         if (diff_sw == 0):
             diff_limit = diff_relative
+            Name_diff_sw = 'RELATIVE_DIFF_THESHOLD_'
         elif (diff_sw == 1):
-            diff_limit = DIFF_MEAN_ABSOLUTE
+            diff_limit = DIFF_MEAN_ABSOLUTE        
+            Name_diff_sw = 'ABSOLUTE_DIFF_THESHOLD_'
+        else:
+            None
 
-        classified_each_blocks_before, classified_each_blocks_after, open_diff, close_diff,classified_diff_before,classified_diff_after = get_Is_Intense_diff(diff_limit, diff_blocks_intense)
+        ## diffのFlatと判定するしきい値のチューニング
+        ## 出力ファイルの名前も
+        if Change_Theshold_diff_sw == 0: 
+            Name_std_config = '1_0'
+        elif Change_Theshold_diff_sw == 1:
+            diff_limit = 1.64*diff_limit
+            Name_std_config = '1_64'
+        elif Change_Theshold_diff_sw == 2:
+            diff_limit = 1.96*diff_limit
+            Name_std_config = '1_96'
+        elif Change_Theshold_diff_sw == 3:
+            diff_limit = 0.75*diff_limit
+            Name_std_config = '0_75'
+        elif Change_Theshold_diff_sw == 4:
+            diff_limit = 0.50*diff_limit
+            Name_std_config = '0_50'
+        else:
+            None
+
+        classified_each_blocks_before, classified_each_blocks_after, open_diff, close_diff,classified_diff_before,classified_diff_after = get_Categoly_diff(diff_limit, diff_blocks_intense)
     
         # pandas DFをmain文で定義して、DFを引数としてpandas作成関数に渡す
         # こうすることによって、違うSAMPLE BLOCKSに対しても同じDFにデータを入れることができる
@@ -637,22 +660,17 @@ DF_train["DIFF"]=tmp_se_diff
 print(len(DF_train))
 print(DF_train.head())
 
+
+
+################################################################
+###                   出力ファイルの名前                        ###
+################################################################
+
+csvfile_name_classified = 'classified_sample_' + Name_rate_sw + '_' + Name_diff_sw + Name_std_config
+
+DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/test_variation/%s.csv" % csvfile_name_classified)
+
 # CSVへと出力
 #DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/%s_after2014.csv" % csvfile_name_classified)
 #DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/%s_ALL_TRUE_THESHOLD.csv" % csvfile_name_classified)
 #DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/%s_ALL_OPEN_CLOSE_THESHOLD.csv" % csvfile_name_classified)
-
-
-
-if( Change_Theshold_rate_sw==0 ):
-    DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/test_variation/%s_ALL_OPEN_CLOSE_THESHOLD_std1.csv" % csvfile_name_classified)
-elif( Change_Theshold_rate_sw==1 ):
-    DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/test_variation/%s_ALL_OPEN_CLOSE_THESHOLD_std1_64.csv" % csvfile_name_classified)
-elif( Change_Theshold_rate_sw==2 ):
-    DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/test_variation/%s_ALL_OPEN_CLOSE_THESHOLD_std1_96.csv" % csvfile_name_classified)
-elif( Change_Theshold_rate_sw==3 ):
-    DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/test_variation/%s_ALL_OPEN_CLOSE_THESHOLD_std0_75.csv" % csvfile_name_classified)
-elif( Change_Theshold_rate_sw==4 ):
-    DF_train.to_csv("/Users/apple/python/oanda/output_classified_csv/test_variation/%s_ALL_OPEN_CLOSE_THESHOLD_std0_50.csv" % csvfile_name_classified)
-else:
-    None
