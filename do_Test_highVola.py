@@ -505,10 +505,10 @@ def get_Threshold(mean ,std, size):
     return under_Threshold , over_Threshold
 
 
-def judge_new_rate(df, targetpoint, rand_index, sample_size, diff_std):
+def judge_LatestRate_UseDiff(df, targetpoint, rand_index, sample_size, under_diff_Threshold, over_diff_Threshold):
 
-    under_diff_Threshold = diff_std*(-1)
-    over_diff_Threshold = diff_std
+    under_diff_Threshold = diff_std*(-1)*SIZE_THRESHOLD
+    over_diff_Threshold = diff_std*SIZE_THRESHOLD
 
     start_index = rand_index + SAMPLE_SIZE + targetpoint
     rate_latest = df.at[start_index, 'OPEN']
@@ -523,6 +523,23 @@ def judge_new_rate(df, targetpoint, rand_index, sample_size, diff_std):
 
     return ret, start_index, diff_latest, rate_latest
 
+def judge_LatestRate_UseRate(df, targetpoint, rand_index, sample_size, under_rate_Threshold, over_rate_Threshold):
+
+    
+    start_index = rand_index + SAMPLE_SIZE
+    now_index = rand_index + SAMPLE_SIZE + targetpoint
+    rate_latest = df.at[now_index, 'OPEN']
+
+    if(rate_latest <= under_rate_Threshold):
+        ret = 'UNDER'
+    elif(rate_latest >= over_rate_Threshold):
+        ret = 'OVER'
+    else:
+        ret = 'NONE'
+
+    return ret, start_index, now_index ,rate_latest
+
+
 
 def get_diff_after_detect(df, result_judged_rate, detected_index, detected_rate, diff_std):
 
@@ -536,7 +553,7 @@ def get_diff_after_detect(df, result_judged_rate, detected_index, detected_rate,
         rate_after = df.at[detected_index+i, 'OPEN']
         rate_after_list.append( rate_after )
 
-        diff = detected_rate - rate_after
+        diff = rate_after - detected_rate 
         diff_after_list.append( round(diff,3) )
 
         ## latestを一つづつ進めていき、OVERを検出したとき
@@ -573,6 +590,69 @@ def get_diff_after_detect(df, result_judged_rate, detected_index, detected_rate,
 
     return rate_after_list, diff_after_list, result_list
 
+def get_ResultData(Result_rate_after_list, Result_diff_after_list, Result_result_list):
+
+    print(Result_result_list)
+
+
+
+def for_Result_Statistic(result_list,sum_Result,winlose,category):
+    
+    for i in range(0,6):
+        for j in range(0,5):
+            if (result_list[i] == category[j]) :
+                sum_Result[i][j] = sum_Result[i][j] + 1
+
+                if(i == 5):
+                    if(j==0 or j==1):
+                        winlose[0] = winlose[0] + 1
+                    elif(j==3 or j==4):
+                        winlose[1] = winlose[1] + 1
+                    else:
+                        None
+                else:
+                    None
+
+            else:
+                None
+
+
+def drow_Graph_detected(df,rand_index,detected_index):
+    RATE = df.loc[ rand_index:detected_index+7 , 'OPEN']
+    detected_point = df.at[ detected_index+1 , 'OPEN']
+    index_num = np.arange(rand_index, detected_index+8)
+    plt.title('%d' %detected_index)
+    plt.plot(index_num, RATE)
+    plt.plot(detected_index, detected_point,marker='o', markersize=10)
+    plt.show()
+
+
+def drow_Graph_toDetermine_RateOrDiff(df,rand_index,start_index,detected_index_byRate, under_rate_Threshold, over_rate_Threshold):
+    
+    detected_index = detected_index_byRate
+
+    ###### diffで検出したときの　マーカー
+    ###### Rateで検出したときの　マーカー
+    ###### サンプル100ので検出したときの　マーカー
+    after = 30
+
+    RATE = df.loc[ rand_index:detected_index+after-1 , 'OPEN']
+    detected_point = df.at[ detected_index , 'OPEN']
+    start_point = df.at[ start_index , 'OPEN']
+    index_num = np.arange(rand_index, detected_index+after)
+
+    under_line =  np.full(len(index_num), under_rate_Threshold)
+    over_line =  np.full(len(index_num), over_rate_Threshold)
+
+    plt.plot(index_num, under_line,linestyle='dashed',color='green')
+    plt.plot(index_num, over_line,linestyle='dashed',color='green')
+    plt.plot(index_num, RATE)
+    plt.plot(start_index, start_point,marker='o', markersize=10,color='red')
+    plt.plot(detected_index, detected_point,marker='o', markersize=10)
+    plt.show()
+
+    
+
 ###################################################################################
 ###################################################################################
 ###           　　　　　　　　            main文                                   ###
@@ -600,17 +680,28 @@ df = pd.read_csv('/Users/apple/python/oanda/input_USDJPY_CSV/USDJPY_10m_DIFF.csv
 ##############################################################
 
 SAMPLE_SIZE = 100
-SIZE_THRESHOLD = 1
+SIZE_THRESHOLD = 1.5
 
+Result_rate_after_list = []
+Result_diff_after_list = []
+Result_result_list = []
 
-for i in range(50):
+category = ['WIN', 'WIN_LITTLE','NOTHING' ,'LOOSE_LITTLE', 'LOOSE' ]
+sum_Result = [[0]*5 for i in range(6)] # [0,0,0,0,0]にcategoryのsumが入っており、　外側のlistが、diff,1〜7を意味する
+winlose = [0,0]
+
+mean_target_point = 0
+
+for i in range(100):
 
     sample_block , date , rand_index = get_rand_sample_fromALLrate(df,SAMPLE_SIZE)
 
     candle_mean , candle_std = get_Statistics_sample_candle(sample_block)
     diff_mean , diff_std = get_Statistics_sample_diff(sample_block)
 
+    ## 検出アルゴリズムはdiffで判定すべきなのか、rateで判定すべきなのかわからないので2つようい
     under_rate_Threshold, over_rate_Threshold = get_Threshold(candle_mean , candle_std , SIZE_THRESHOLD)
+    under_diff_Threshold, over_diff_Threshold = get_Threshold(diff_mean , diff_std , SIZE_THRESHOLD)
 
     ## diffのしきい値を検出するまでの LOOP
     detect_F = 0
@@ -618,17 +709,39 @@ for i in range(50):
     while(detect_F==0):
         targetpoint = targetpoint + 1
 
-        ## rateのjadgeはdiffの分散をみて行うことにする。
-        result_judged_rate, detected_index, deceted_diff, detected_rate = judge_new_rate(df, targetpoint,rand_index, SAMPLE_SIZE, diff_std)
+        ## rateのjadgeはdiffで検出したパターンとrateで検出したパターンと2つ用意する
+        result_judged_rate_byRate, start_index ,detected_index_byRate, detected_rate_byRate = judge_LatestRate_UseRate(df, targetpoint,rand_index, SAMPLE_SIZE, under_rate_Threshold, over_rate_Threshold)
 
-        ## while loop 判定用　diffのしきい値超えを検出するまで、loopを回す
-        if( result_judged_rate=='NONE' ):
+
+        ## while loop 判定用　しきい値超えを検出するまで、loopを回す
+        
+        if( result_judged_rate_byRate=='NONE' ):
             detect_F = 0
         else:
             detect_F = 1
+        
+    print(rand_index, detected_index_byRate)
+    drow_Graph_toDetermine_RateOrDiff(df,rand_index,start_index,detected_index_byRate, under_rate_Threshold, over_rate_Threshold)
 
-    rate_after_list, diff_after_list, result_list = get_diff_after_detect(df, result_judged_rate, detected_index, detected_rate, diff_std)
 
+
+
+    ##############
+    ##############
+    ##############
+
+
+    #rate_after_list, diff_after_list, result_list = get_diff_after_detect(df, result_judged_rate, detected_index, detected_rate, diff_std)
+
+    #drow_Graph_detected(df,rand_index,detected_index)
+
+"""
+    for_Result_Statistic(result_list,sum_Result,winlose,category) # sum_Resultの中に足し合わせ用のデータを入れていく
+    print(result_list)
+    
+    mean_target_point = mean_target_point + targetpoint
+
+    '''
     print(" ******* LOOP %d *******" %i)
     print("-------->", diff_std)
     print("----------MOMENT-----------   ")
@@ -641,6 +754,16 @@ for i in range(50):
     print(diff_after_list)
     print(result_list)
     print('\n')
+    '''
+"""
+mean_target_point = round(mean_target_point/100, 3)
+
+print(mean_target_point)
+print(sum_Result)
+print(winlose)
+
+#get_ResultData(Result_rate_after_list, Result_diff_after_list, Result_result_list)
+
 
 """
 print(rand_index)
